@@ -22,17 +22,16 @@ app = create_app(Session)
 
 async def main():
     # Регистрация обработчиков
+    print("Запускаю регистрацию хендлеров...")
     register_handlers(bot)
 
     # Запуск бота
+    print("Запуск бота...")
     await bot.start()
 
     # Запуск веб-приложения
     from web.app import start_web_server
     await start_web_server(app)
-
-    # Держим бота запущенным
-    await bot.idle()
 
 
 if __name__ == "__main__":

@@ -15,9 +15,7 @@ DATABASE_URL = os.getenv('DATABASE_URL')
 SECRET_KEY = os.getenv('SECRET_KEY')
 ADMIN_USERNAME = os.getenv('ADMIN_USERNAME')
 ADMIN_PASSWORD = os.getenv('ADMIN_PASSWORD')
-
-# Redis Configuration (для rate limiting)
-REDIS_URL = os.getenv('REDIS_URL')
+TG_ADMIN_USERNAME = os.getenv('TG_ADMIN_USERNAME')
 
 # Quiz Configuration
 TEAMS_COUNT = 5

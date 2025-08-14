@@ -6,6 +6,7 @@ from database.db import init_db
 Session = init_db(DATABASE_URL)
 from utils.rate_limiter import RateLimiter
 
+@Client.on_message(filters.command("start") & filters.private)
 @RateLimiter(seconds=5)  # 1 запрос каждые 5 секунд
 async def start_registration(client, message):
     # Проверка, является ли пользователь уже участником команды

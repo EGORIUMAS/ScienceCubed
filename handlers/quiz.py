@@ -1,5 +1,5 @@
 from pyrogram import Client, filters
-from database.db import Team, Player
+from database.db import Team, Player, Question
 from config import DATABASE_URL
 from database.db import init_db
 Session = init_db(DATABASE_URL)
