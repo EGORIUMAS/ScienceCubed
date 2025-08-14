@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Quiz Control Panel</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div id="app">
+        <div id="login-section" v-if="!isLoggedIn">
+            <h2>Вход в панель управления</h2>
+            <form @submit.prevent="login">
+                <input type="text" v-model="username" placeholder="Имя пользователя">
+                <input type="password" v-model="password" placeholder="Пароль">
+                <button type="submit">Войти</button>
+            </form>
+        </div>
+
+        <div id="control-panel" v-else>
+            <div class="sidebar">
+                <h3>Раунды</h3>
+                <div class="round-selector">
+                    <button
+                        v-for="round in 3"
+                        :key="round"
+                        @click="selectRound(round)"
+                        :class="{ active: currentRound === round }"
+                    >
+                        Раунд {{ round }}
+                    </button>
+                </div>
+            </div>
+
+            <div class="main-content">
+                <div class="question-section">
+                    <h3>Текущий вопрос</h3>
+                    <div class="question-display" v-if="currentQuestion">
+                        <p>{{ currentQuestion.text }}</p>
+                        <div class="timer" v-if="timer > 0">
+                            {{ timer }}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="controls">
+                    <button @click="startQuestion" :disabled="!currentQuestion">
+                        Начать вопрос
+                    </button>
+                    <button @click="showAnswers" :disabled="!currentQuestion">
+                        Показать ответы
+                    </button>
+                </div>
+
+                <div class="results" v-if="showingResults">
+                    <h3>Результаты</h3>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Команда</th>
+                                <th>Очки</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="team in teamResults" :key="team.name">
+                                <td>{{ team.name }}</td>
+                                <td>{{ team.score }}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/vue@2"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>
