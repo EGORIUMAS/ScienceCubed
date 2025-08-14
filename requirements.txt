@@ -11,3 +11,4 @@ jwt==1.4.0
 psycopg2==2.9.10
 gevent==24.2.1
 gevent-websocket==0.10.1
+PyJWT==2.10.1

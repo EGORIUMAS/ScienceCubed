@@ -4,14 +4,14 @@ from functools import wraps
 import jwt
 from datetime import datetime, timedelta
 from database.db import Team, Question, init_db
-from config import DATABASE_URL
+from config import DATABASE_URL, SECRET_KEY, ADMIN_USERNAME, ADMIN_PASSWORD
 
 Session = init_db(DATABASE_URL)
 
 
 def create_app(db_session):
     app = Flask(__name__)
-    app.config['SECRET_KEY'] = 'your-secret-key'
+    app.config['SECRET_KEY'] = SECRET_KEY or 'your-secret-key'  # Используем значение из конфига
     socketio = SocketIO(app)
 
     def token_required(f):
@@ -37,14 +37,31 @@ def create_app(db_session):
         try:
             teams = session.query(Team).all()
             current_question = session.query(Question).order_by(Question.id.desc()).first()
+
+            # Преобразуем данные в формат, подходящий для JSON
             initial_data = {
-                'teams': [{'name': team.name, 'score': team.score} for team in teams],
-                'currentQuestion': {
-                    'text': current_question.text,
-                    'round': current_question.round_number
-                } if current_question else None
+                'teams': [
+                    {
+                        'name': team.name,
+                        'score': team.score or 0,  # Добавляем проверку на None
+                        'id': team.id
+                    }
+                    for team in teams
+                ],
+                'currentQuestion': None
             }
+
+            if current_question:
+                initial_data['currentQuestion'] = {
+                    'text': current_question.text,
+                    'round': current_question.round_number,
+                    'id': current_question.id
+                }
+
             return render_template('index.html', initial_data=initial_data)
+        except Exception as e:
+            print(f"Error in index route: {str(e)}")  # Добавляем логирование ошибок
+            return render_template('index.html', initial_data={'teams': [], 'currentQuestion': None})
         finally:
             session.close()
 
@@ -52,7 +69,13 @@ def create_app(db_session):
     def login():
         auth = request.authorization
 
-        if auth and auth.username == 'admin' and auth.password == 'password':
+        if not auth:
+            return jsonify({'message': 'Missing credentials'}), 401
+
+        if not ADMIN_USERNAME or not ADMIN_PASSWORD:
+            return jsonify({'message': 'Server configuration error'}), 500
+
+        if auth.username == ADMIN_USERNAME and auth.password == ADMIN_PASSWORD:
             token = jwt.encode({
                 'user': auth.username,
                 'exp': datetime.utcnow() + timedelta(hours=24)
@@ -60,7 +83,7 @@ def create_app(db_session):
 
             return jsonify({'token': token})
 
-        return jsonify({'message': 'Could not verify!'}), 401
+        return jsonify({'message': 'Invalid credentials'}), 401
 
     @app.route('/api/questions', methods=['GET'])
     @token_required

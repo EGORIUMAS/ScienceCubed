@@ -6,6 +6,11 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
+    <!-- Добавляем инициализацию данных перед Vue приложением -->
+    <script>
+        window.initialData = {{ initial_data|tojson|safe if initial_data else '{"teams":[],"currentQuestion":null}' }};
+    </script>
+
     <div id="app">
         <div id="login-section" v-if="!isLoggedIn">
             <h2>Вход в панель управления</h2>
@@ -14,6 +19,7 @@
                 <input type="password" v-model="password" placeholder="Пароль">
                 <button type="submit">Войти</button>
             </form>
+            <p class="error" v-if="loginError" style="color: red;">{{ loginError }}</p>
         </div>
 
         <div id="control-panel" v-else>
@@ -34,10 +40,16 @@
             <div class="main-content">
                 <div class="question-section">
                     <h3>Текущий вопрос</h3>
-                    <div class="question-display" v-if="currentQuestion">
-                        <p>{{ currentQuestion.text }}</p>
-                        <div class="timer" v-if="timer > 0">
-                            {{ timer }}
+                    <div class="question-display">
+                        <!-- Используем Vue v-if вместо прямого обращения к переменной -->
+                        <div v-if="currentQuestion">
+                            <p v-text="currentQuestion.text"></p>
+                            <div class="timer" v-if="timer > 0">
+                                {{ timer }}
+                            </div>
+                        </div>
+                        <div v-else>
+                            <p>Нет активного вопроса</p>
                         </div>
                     </div>
                 </div>
@@ -53,7 +65,7 @@
 
                 <div class="results">
                     <h3>Результаты команд</h3>
-                    <table>
+                    <table v-if="teams.length > 0">
                         <thead>
                             <tr>
                                 <th>Команда</th>
@@ -62,11 +74,12 @@
                         </thead>
                         <tbody>
                             <tr v-for="team in teams" :key="team.name">
-                                <td>{{ team.name }}</td>
-                                <td>{{ team.score }}</td>
+                                <td v-text="team.name"></td>
+                                <td v-text="team.score"></td>
                             </tr>
                         </tbody>
                     </table>
+                    <p v-else>Нет зарегистрированных команд</p>
                 </div>
             </div>
         </div>

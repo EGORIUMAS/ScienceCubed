@@ -4,6 +4,7 @@ new Vue({
         isLoggedIn: false,
         username: '',
         password: '',
+        loginError: '',
         currentRound: 1,
         currentQuestion: window.initialData ? window.initialData.currentQuestion : null,
         timer: 0,
@@ -21,21 +22,32 @@ new Vue({
     methods: {
         async login() {
             try {
+                this.loginError = '';  // Сбрасываем ошибку
                 const response = await fetch('/login', {
                     method: 'POST',
                     headers: {
                         'Authorization': 'Basic ' + btoa(this.username + ':' + this.password)
                     }
                 });
+
                 const data = await response.json();
+
+                if (!response.ok) {
+                    this.loginError = data.message || 'Ошибка входа';
+                    console.error('Login failed:', data.message);
+                    return;
+                }
 
                 if (data.token) {
                     this.token = data.token;
                     this.isLoggedIn = true;
                     this.loadQuestions();
+                } else {
+                    this.loginError = 'Неверный ответ сервера';
                 }
             } catch (error) {
-                console.error('Login failed:', error);
+                console.error('Login error:', error);
+                this.loginError = 'Ошибка при попытке входа';
             }
         },
 
