@@ -3,6 +3,10 @@ from flask_socketio import SocketIO, emit
 from functools import wraps
 import jwt
 from datetime import datetime, timedelta
+from database.db import Team, Question, init_db
+from config import DATABASE_URL
+
+Session = init_db(DATABASE_URL)
 
 
 def create_app(db_session):
@@ -29,7 +33,17 @@ def create_app(db_session):
 
     @app.route('/')
     def index():
-        return render_template('index.html')
+        session = Session()  # Создаем новый экземпляр сессии
+        try:
+            # Получаем все команды и текущий вопрос
+            teams = session.query(Team).all()
+            current_question = session.query(Question).order_by(Question.id.desc()).first()
+
+            return render_template('index.html',
+                                   teams=teams,
+                                   currentQuestion=current_question)
+        finally:
+            session.close()
 
     @app.route('/login', methods=['POST'])
     def login():
