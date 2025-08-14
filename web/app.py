@@ -33,15 +33,18 @@ def create_app(db_session):
 
     @app.route('/')
     def index():
-        session = Session()  # Создаем новый экземпляр сессии
+        session = Session()
         try:
-            # Получаем все команды и текущий вопрос
             teams = session.query(Team).all()
             current_question = session.query(Question).order_by(Question.id.desc()).first()
-
-            return render_template('index.html',
-                                   teams=teams,
-                                   currentQuestion=current_question)
+            initial_data = {
+                'teams': [{'name': team.name, 'score': team.score} for team in teams],
+                'currentQuestion': {
+                    'text': current_question.text,
+                    'round': current_question.round_number
+                } if current_question else None
+            }
+            return render_template('index.html', initial_data=initial_data)
         finally:
             session.close()
 

@@ -35,17 +35,7 @@
                 <div class="question-section">
                     <h3>Текущий вопрос</h3>
                     <div class="question-display" v-if="currentQuestion">
-                        {% if currentQuestion %}
-                            <div class="question">
-                                <h2>Текущий вопрос</h2>
-                                <p>{{ currentQuestion.text }}</p>
-                                <p>Раунд: {{ currentQuestion.round_number }}</p>
-                            </div>
-                        {% else %}
-                            <div class="question">
-                                <p>Нет активных вопросов</p>
-                            </div>
-                        {% endif %}
+                        <p>{{ currentQuestion.text }}</p>
                         <div class="timer" v-if="timer > 0">
                             {{ timer }}
                         </div>
@@ -61,8 +51,8 @@
                     </button>
                 </div>
 
-                <div class="results" v-if="showingResults">
-                    <h3>Результаты</h3>
+                <div class="results">
+                    <h3>Результаты команд</h3>
                     <table>
                         <thead>
                             <tr>
@@ -71,7 +61,7 @@
                             </tr>
                         </thead>
                         <tbody>
-                            <tr v-for="team in teamResults" :key="team.name">
+                            <tr v-for="team in teams" :key="team.name">
                                 <td>{{ team.name }}</td>
                                 <td>{{ team.score }}</td>
                             </tr>
@@ -84,6 +74,10 @@
 
     <script src="https://cdn.jsdelivr.net/npm/vue@2"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <!-- Передаем начальные данные в Vue приложение -->
+    <script>
+        window.initialData = {{ initial_data|tojson|safe }};
+    </script>
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
 </body>
 </html>
