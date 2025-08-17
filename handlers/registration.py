@@ -1,35 +1,38 @@
 from pyrogram import Client, filters
-from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
-from database.db import Team, Player
-from config import DATABASE_URL
+from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery, Message
+from database.db import Team
+from config import DATABASE_URL, TG_ADMIN_USERNAME
 from database.db import init_db
 Session = init_db(DATABASE_URL)
 from utils.rate_limiter import RateLimiter
+import json
 
-@Client.on_message(filters.command("start") & filters.private)
-@RateLimiter(seconds=5)  # 1 запрос каждые 5 секунд
+user_states = {}
+
+#@RateLimiter(seconds=5)  # 1 запрос каждые 5 секунд
 async def start_registration(client, message):
+    if message.from_user.username == TG_ADMIN_USERNAME:
+        await message.reply("Добра пожаловать, администратор! Но, увы, эта команда не для вас")
+        return
     # Проверка, является ли пользователь уже участником команды
     session = Session()
-    player = session.query(Player).filter_by(telegram_id=message.from_user.id).first()
+    player = session.query(Team).filter_by(leader_id=message.from_user.id).first()
 
     if player:
-        await message.reply("Вы уже зарегистрированы в команде!")
+        await message.reply("Вы уже зарегистрировали (или начали) команду!")
         return
 
     keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("Создать команду", callback_data="create_team")],
-        [InlineKeyboardButton("Присоединиться к команде", callback_data="join_team")]
+        [InlineKeyboardButton("Создать команду", callback_data="create_team")]
     ])
 
     await message.reply(
-        "Добро пожаловать в викторину!\n"
-        "Выберите действие:",
+        "Добро пожаловать в викторину!\n",
         reply_markup=keyboard
     )
 
 
-@Client.on_callback_query(filters.regex("create_team"))
+#@RateLimiter(seconds=5)
 async def create_team_handler(client, callback_query: CallbackQuery):
     # Создание новой команды
     await client.send_message(
@@ -37,12 +40,12 @@ async def create_team_handler(client, callback_query: CallbackQuery):
         "Введите название команды:"
     )
     # Установка состояния ожидания названия команды
-    client.user_state[callback_query.from_user.id] = "waiting_team_name"
+    user_states[callback_query.from_user.id] = "waiting_team_name"
 
 
-@Client.on_message(filters.private & filters.text)
-async def handle_team_creation(client, message):
-    user_state = client.user_state.get(message.from_user.id)
+#@RateLimiter(seconds=5)
+async def handle_team_creation(client: Client, message: Message):
+    user_state = user_states.get(message.from_user.id)
 
     if user_state == "waiting_team_name":
         session = Session()
@@ -60,20 +63,41 @@ async def handle_team_creation(client, message):
         )
         session.add(new_team)
 
-        # Добавление лидера как игрока
-        new_player = Player(
-            telegram_id=message.from_user.id,
-            username=message.from_user.username,
-            team_id=new_team.id
-        )
-        session.add(new_player)
-
         session.commit()
 
         await message.reply(
             f"Команда '{message.text}' успешно создана!\n"
             "Теперь добавьте остальных участников (до 3 человек).\n"
-            "Отправьте их @username по одному в сообщении."
+            "Отправьте их имена, фамилии и команды по одному человеку в сообщении.\n"
+            "Если людей в команде меньше 4, в конце отправьте 0.\n"
+            "Не забудьте добавить себя!"
         )
 
-        client.user_state[message.from_user.id] = "adding_players"
+        user_states[message.from_user.id] = "adding_players"
+
+        session.close()
+    elif user_state == "adding_players":
+        session = Session()
+
+        team = session.query(Team).filter_by(leader_id=message.from_user.id).first()
+        players = json.loads(team.players)
+
+        if message.text == "0":
+            if len(players) == 0:
+                await message.reply("В команде не может быть 0 человек!")
+                session.close()
+                return
+            user_states[message.from_user.id] = "done"
+            await client.send_message(message.from_user.id, "Все участники команды успешно добавлены! Ожидайте.")
+            session.close()
+        else:
+            players.append(message.text)
+            team.players = json.dumps(players)
+            session.commit()
+            session.close()
+
+            await client.send_message(message.from_user.id, f"Участник {message.text} успешно добавлен!")
+
+            if len(players) == 4:
+                user_states[message.from_user.id] = "done"
+                await client.send_message(message.from_user.id, "Все участники команды успешно добавлены! Ожидайте.")

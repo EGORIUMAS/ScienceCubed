@@ -1,13 +1,13 @@
 from pyrogram import Client, filters
-from database.db import Team, Player, Question
+from database.db import Team, Question
 from config import DATABASE_URL
 from database.db import init_db
 Session = init_db(DATABASE_URL)
 from utils.rate_limiter import RateLimiter
+import json
 
 
-@Client.on_message(filters.command("help"))
-@RateLimiter(seconds=5)
+#@RateLimiter(seconds=5)
 async def help_command(client, message):
     help_text = """
 🤖 Команды бота:
@@ -18,7 +18,6 @@ async def help_command(client, message):
 
 ❓ Викторина:
 /status - Показать статус текущей игры
-/score - Показать счет вашей команды
 /leaderboard - Таблица лидеров
 
 ℹ️ Прочее:
@@ -28,8 +27,7 @@ async def help_command(client, message):
     await message.reply(help_text)
 
 
-@Client.on_message(filters.command("rules"))
-@RateLimiter(seconds=5)
+#@RateLimiter(seconds=5)
 async def rules_command(client, message):
     rules_text = """
 📜 Правила викторины:
@@ -57,17 +55,15 @@ async def rules_command(client, message):
     await message.reply(rules_text)
 
 
-@Client.on_message(filters.command("status"))
-@RateLimiter(seconds=5)
+#@RateLimiter(seconds=5)
 async def status_command(client, message):
     session = Session()
     try:
-        player = session.query(Player).filter_by(telegram_id=message.from_user.id).first()
-        if not player:
+        team = session.query(Team).filter_by(leader_id=message.from_user.id).first()
+        if not team:
             await message.reply("Вы не зарегистрированы в игре. Используйте /start для регистрации.")
             return
 
-        team = session.query(Team).get(player.team_id)
         current_question = session.query(Question).order_by(Question.id.desc()).first()
 
         status_text = f"""
@@ -75,7 +71,7 @@ async def status_command(client, message):
 
 👥 Ваша команда: {team.name}
 🎯 Текущий счет: {team.score or 0} очков
-👥 Участников в команде: {len(team.players)}
+👥 Участников в команде: {len(json.loads(team.players))}
 
 """
         if current_question:
@@ -86,8 +82,7 @@ async def status_command(client, message):
         session.close()
 
 
-@Client.on_message(filters.command("leaderboard"))
-@RateLimiter(seconds=5)
+#@RateLimiter(seconds=5)
 async def leaderboard_command(client, message):
     session = Session()
     try:
