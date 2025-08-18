@@ -26,8 +26,8 @@ async def send_question(client, question_id, chat_id):
         elif question.round_number == 2:
             options = json.loads(question.options or '{}')
             keyboard = InlineKeyboardMarkup([
-                [InlineKeyboardButton(f"{opt}: {options[opt]}", callback_data=f"answer_{question_id}_{opt}")
-                 for opt in ['A', 'B', 'C', 'D']]
+                [InlineKeyboardButton(f"{opt}: {options[opt]}", callback_data=f"answer_{question_id}_{opt}")]
+                 for opt in ['A', 'B', 'C', 'D']
             ])
 
         message = await client.send_message(
@@ -63,6 +63,12 @@ async def handle_answer(client, callback_query):
             await callback_query.answer("Вопрос не найден!")
             return
 
+        # уже есть ответ?
+        existing = session.query(Answer).filter_by(team_id=team.id, question_id=question_id).first()
+        if existing:
+            await callback_query.answer("Вы уже ответили!")
+            return
+
         if time.time() > (question.start_time or 0) + question.time_limit:
             await callback_query.answer("Время вышло!")
             return
@@ -84,6 +90,10 @@ async def handle_answer(client, callback_query):
         team.answers = json.dumps(answers)
 
         session.commit()
+
+        # убираем кнопки у сообщения
+        await callback_query.message.edit_reply_markup(None)
+
         await callback_query.answer("Ваш ответ принят!")
     finally:
         session.close()
@@ -105,6 +115,10 @@ async def handle_text_answer(client, message):
             return
         if time.time() > (question.start_time or 0) + question.time_limit:
             await message.reply("Время вышло!")
+            return
+        existing = session.query(Answer).filter_by(team_id=team.id, question_id=question.id).first()
+        if existing:
+            await message.reply("Ответ уже отправлен!")
             return
 
         keyboard = InlineKeyboardMarkup([
