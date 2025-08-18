@@ -1,79 +1,55 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ru">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Quiz Control Panel</title>
-    <link rel="stylesheet" href="/static/style.css">
-    <script src="https://cdn.jsdelivr.net/npm/vue@2"></script>
-    <script src="https://cdn.jsdelivr.net/npm/socket.io-client@4"></script>
+    <title>Викторина</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.js"></script>
 </head>
 <body>
-    <div id="app">
-        <div v-if="!isLoggedIn" id="login-section">
-            <h2>Вход в панель управления</h2>
-            <form @submit.prevent="login">
-                <input v-model="username" type="text" placeholder="Имя пользователя" required>
-                <input v-model="password" type="password" placeholder="Пароль" required>
-                <button type="submit">Войти</button>
-            </form>
-            <p v-if="loginError">{{ loginError }}</p>
+    <header>
+        <h1>Викторина</h1>
+        <div id="round-info">Раунд: <span id="current-round">0</span> | Вопросы: <span id="question-progress">0/0</span></div>
+    </header>
+    <main id="content">
+        <!-- Ожидание начала -->
+        <div id="waiting" class="hidden">
+            <h2>Ожидание начала игры</h2>
+            <p>Подключитесь через бота:</p>
+            <img src="/static/images/qr.png" alt="QR-код для бота" width="300">
         </div>
-
-        <div v-else id="control-panel">
-            <div class="sidebar">
-                <h3>Раунды</h3>
-                <div class="round-selector">
-                    <button v-for="round in [1, 2, 3]" :class="{ active: currentRound === round }" @click="selectRound(round)">
-                        Раунд {{ round }}
-                    </button>
-                </div>
-            </div>
-
-            <div class="main-content">
-                <div class="question-display">
-                    <h2>Текущий вопрос</h2>
-                    <div v-if="initial_data.currentQuestion">
-                        <p>{{ initial_data.currentQuestion.text }}</p>
-                        <div v-if="initial_data.currentQuestion.round === 1" class="options">
-                            <div class="option" :class="{correct: showingResults && correctAnswer === 'true'}">Правда</div>
-                            <div class="option" :class="{correct: showingResults && correctAnswer === 'false'}">Ложь</div>
-                        </div>
-                        <div v-else-if="initial_data.currentQuestion.round === 2" class="options">
-                            <div v-for="(text, opt) in initial_data.currentQuestion.options" class="option" :class="{correct: showingResults && correctAnswer === opt}">
-                                {{ opt }}: {{ text }}
-                            </div>
-                        </div>
-                        <div v-else-if="initial_data.currentQuestion.round === 3 && showingResults">
-                            Правильный ответ: {{ correctAnswer }}
-                        </div>
-                        <div class="timer">{{ timer }}</div>
-                    </div>
-                    <div v-else>
-                        <p>Нет активного вопроса</p>
-                    </div>
-                </div>
-
-                <div class="results">
-                    <h2>Результаты команд</h2>
-                    <table v-if="initial_data.teams.length && showingResults">
-                        <tr>
-                            <th>Команда</th>
-                            <th>Очки</th>
-                        </tr>
-                        <tr v-for="team in initial_data.teams">
-                            <td>{{ team.name }}</td>
-                            <td>{{ team.score }}</td>
-                        </tr>
-                    </table>
-                    <p v-else>Нет зарегистрированных команд</p>
-                </div>
+        <!-- Вопрос -->
+        <div id="question-container" class="hidden">
+            <h2 id="question-text"></h2>
+            <div id="options" class="options"></div>
+            <div id="timer-container">
+                <svg id="timer-svg" width="200" height="200">
+                    <circle cx="100" cy="100" r="90" stroke="#6f42c1" stroke-width="10" fill="none" />
+                    <circle id="progress-circle" cx="100" cy="100" r="90" stroke="#28a745" stroke-width="10" fill="none" stroke-dasharray="565" stroke-dashoffset="0" />
+                    <text id="timer-text" x="100" y="105" text-anchor="middle" fill="#007bff">30</text>
+                </svg>
             </div>
         </div>
-    </div>
-    <script>
-        window.initial_data = {{ initial_data | tojson | safe }};
-    </script>
-    <script src="/static/main.js"></script>
+        <!-- Результаты -->
+        <div id="results-container" class="hidden">
+            <h2>Результаты</h2>
+            <p id="correct-answer"></p>
+            <table id="leaderboard">
+                <thead>
+                    <tr>
+                        <th>Команда</th>
+                        <!-- Баллы за вопросы будут динамически добавлены -->
+                        <th>Сумма</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </main>
+    <audio id="tick-sound" src="/static/sounds/tick.mp3"></audio>
+    <audio id="last-tick-sound" src="/static/sounds/last_tick.mp3"></audio>
+    <audio id="end-sound" src="/static/sounds/end.mp3"></audio>
+    <script src="/static/js/main.js"></script>
 </body>
 </html>

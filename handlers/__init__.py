@@ -12,7 +12,7 @@ from .common import *
 logger.basicConfig(level=logger.INFO)
 
 registration_filter = filters.create(
-    lambda _, __, m: user_states.get(m.from_user.id) in ["create_team", "waiting_team_name", "adding_players"]
+    lambda _, __, m: user_states.get(m.from_user.id) == "waiting_team_name" or user_states.get(m.from_user.id) == "adding_players"
 )
 
 def register_handlers(bot):
@@ -24,6 +24,7 @@ def register_handlers(bot):
         bot.add_handler(MessageHandler(start_round, filters.command("start_round")))
         bot.add_handler(MessageHandler(next_question, filters.command("next_question")))
         bot.add_handler(MessageHandler(show_results, filters.command("show_results")))
+        bot.add_handler(MessageHandler(load_questions, filters.command("load_questions")))
         logger.debug("Admin command handlers registered")
 
         # Регистрация общих команд
@@ -44,7 +45,7 @@ def register_handlers(bot):
             handle_answer,
             filters.regex("^answer_")
         ))
-        bot.add_handler(MessageHandler(handle_text_answer, filters.text & filters.regex(r"^[^\\/].*")))
+        bot.add_handler(MessageHandler(handle_text_answer, filters.text & filters.regex(r"^[^\\/].*") & ~registration_filter))
         logger.debug("Quiz handlers registered")
 
         logger.info("All handlers registered successfully")
@@ -58,8 +59,6 @@ def remove_handlers(bot):
         logger.info("All handlers removed successfully")
     except Exception as e:
         logger.error(f"Error removing handlers: {e}", exc_info=True)
-
-user_states = {}
 
 class States:
     IDLE = "idle"

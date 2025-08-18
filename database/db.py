@@ -41,6 +41,10 @@ class GameState(Base):
     current_question_id = Column(Integer, ForeignKey('questions.id'), nullable=True)
 
 def init_db(database_url):
-    engine = create_engine(database_url)
+    # Добавляем параметры для SQLite: таймаут и сериализацию
+    if database_url.startswith('sqlite'):
+        engine = create_engine(database_url, connect_args={'timeout': 15, 'check_same_thread': False})
+    else:
+        engine = create_engine(database_url)
     Base.metadata.create_all(engine)
     return sessionmaker(bind=engine)

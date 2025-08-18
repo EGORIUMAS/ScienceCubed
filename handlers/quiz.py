@@ -13,7 +13,7 @@ async def send_question(client, question_id, chat_id):
     try:
         question = session.query(Question).get(question_id)
         if not question:
-            return
+            return None
 
         keyboard = None
         if question.round_number == 1:
@@ -25,25 +25,20 @@ async def send_question(client, question_id, chat_id):
             ])
         elif question.round_number == 2:
             options = json.loads(question.options or '{}')
-            keyboard = InlineKeyboardMarkup([
-                [InlineKeyboardButton(f"{opt}: {options[opt]}", callback_data=f"answer_{question_id}_{opt}")]
-                 for opt in ['A', 'B', 'C', 'D']
-            ])
+            # Защита на случай, если options пустые или неправильно
+            buttons = []
+            for opt in ['A', 'B', 'C', 'D']:
+                label = options.get(opt, opt)
+                buttons.append([InlineKeyboardButton(f"{opt}: {label}", callback_data=f"answer_{question_id}_{opt}")])
+            keyboard = InlineKeyboardMarkup(buttons)
 
+        # Отправляем сообщение и возвращаем объект message, не ожидая таймер
         message = await client.send_message(
             chat_id,
             f"Вопрос:\n{question.text}\nВремя: {question.time_limit} сек.",
             reply_markup=keyboard
         )
-
-        await asyncio.sleep(question.time_limit)
-        if keyboard:
-            await message.edit_reply_markup(None)
-
-        await client.send_message(
-            chat_id,
-            "Время истекло! Ответы больше не принимаются."
-        )
+        return message
     finally:
         session.close()
 
