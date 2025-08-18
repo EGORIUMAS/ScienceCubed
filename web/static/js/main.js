@@ -1,3 +1,5 @@
+const socket = io();
+
 new Vue({
     el: '#app',
     data: {
@@ -5,102 +7,69 @@ new Vue({
         username: '',
         password: '',
         loginError: '',
-        currentRound: 1,
-        currentQuestion: window.initialData ? window.initialData.currentQuestion : null,
+        currentRound: null,
+        initial_data: window.initial_data || { teams: [], currentQuestion: null },
         timer: 0,
         showingResults: false,
-        teams: window.initialData ? window.initialData.teams : [],
-        teamResults: [],
-        socket: null,
-        token: null,
-        questions: []
-    },
-    created() {
-        this.socket = io();
-        this.setupSocketListeners();
+        correctAnswer: null
     },
     methods: {
-        async login() {
-            try {
-                this.loginError = '';  // Сбрасываем ошибку
-                const response = await fetch('/login', {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': 'Basic ' + btoa(this.username + ':' + this.password)
-                    }
-                });
-
-                const data = await response.json();
-
-                if (!response.ok) {
-                    this.loginError = data.message || 'Ошибка входа';
-                    console.error('Login failed:', data.message);
-                    return;
+        login() {
+            fetch('/login', {
+                method: 'POST',
+                headers: {
+                    'Authorization': 'Basic ' + btoa(this.username + ':' + this.password)
                 }
-
+            })
+            .then(response => response.json())
+            .then(data => {
                 if (data.token) {
-                    this.token = data.token;
+                    localStorage.setItem('token', data.token);
                     this.isLoggedIn = true;
-                    this.loadQuestions();
+                    this.loginError = '';
                 } else {
-                    this.loginError = 'Неверный ответ сервера';
+                    this.loginError = data.message;
                 }
-            } catch (error) {
-                console.error('Login error:', error);
-                this.loginError = 'Ошибка при попытке входа';
-            }
+            })
+            .catch(error => {
+                this.loginError = 'Ошибка входа: ' + error.message;
+            });
         },
-
-        async loadQuestions() {
-            try {
-                const response = await fetch('/api/questions', {
-                    headers: {
-                        'Authorization': this.token
-                    }
-                });
-                this.questions = await response.json();
-            } catch (error) {
-                console.error('Failed to load questions:', error);
-            }
-        },
-
         selectRound(round) {
             this.currentRound = round;
-            this.currentQuestion = this.questions.find(q => q.round === round);
-        },
-
-        startQuestion() {
-            if (this.currentQuestion) {
-                this.socket.emit('start_question', {
-                    question_id: this.currentQuestion.id
-                });
-                this.startTimer();
-            }
-        },
-
-        startTimer() {
-            this.timer = 30; // время в секундах
-            const timerInterval = setInterval(() => {
-                this.timer--;
-                this.socket.emit('timer_update', { time: this.timer });
-
-                if (this.timer <= 0) {
-                    clearInterval(timerInterval);
-                }
-            }, 1000);
-        },
-
-        showAnswers() {
-            this.socket.emit('show_answers', {
-                question_id: this.currentQuestion.id
-            });
-        },
-
-        setupSocketListeners() {
-            this.socket.on('results_update', (data) => {
-                this.teamResults = data.results;
-                this.showingResults = true;
-            });
         }
+    },
+    mounted() {
+        console.log('Initial data:', this.initial_data);
+        socket.on('new_question', (data) => {
+            this.initial_data.currentQuestion = data;
+            this.timer = data.time_limit;
+            this.showingResults = false;
+            this.correctAnswer = null;
+            console.log('New question received:', data);
+        });
+
+        socket.on('timer_update', (data) => {
+            this.timer = data.time;
+        });
+
+        socket.on('timer_end', () => {
+            this.timer = 0;
+        });
+
+        socket.on('show_results', (data) => {
+            this.correctAnswer = data.correct_answer;
+            this.initial_data.teams = data.teams;
+            this.showingResults = true;
+            console.log('Results received:', data);
+        });
+
+        socket.on('round_ended', () => {
+            this.initial_data.currentQuestion = null;
+            this.timer = 0;
+            this.showingResults = false;
+            this.correctAnswer = null;
+            console.log('Round ended');
+        });
     }
 });

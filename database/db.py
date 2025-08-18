@@ -23,7 +23,7 @@ class Question(Base):
     options = Column(String)  # JSON string for round 2
     time_limit = Column(Integer, default=30)
     start_time = Column(Integer)
-    curren = Column(Boolean, default=False)
+    current = Column(Boolean, default=False)
 
 class Answer(Base):
     __tablename__ = 'answers'
@@ -33,6 +33,12 @@ class Answer(Base):
     answer_text = Column(String, nullable=False)
     is_correct = Column(Boolean)
     timestamp = Column(DateTime, default=datetime.utcnow)
+
+class GameState(Base):
+    __tablename__ = 'game_state'
+    id = Column(Integer, primary_key=True)
+    current_round = Column(Integer, default=0)
+    current_question_id = Column(Integer, ForeignKey('questions.id'), nullable=True)
 
 def init_db(database_url):
     engine = create_engine(database_url)

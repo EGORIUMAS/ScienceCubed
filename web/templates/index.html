@@ -1,96 +1,79 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Quiz Control Panel</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="/static/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/vue@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/socket.io-client@4"></script>
 </head>
 <body>
-    <!-- Добавляем инициализацию данных перед Vue приложением -->
-    <script>
-        window.initialData = {{ initial_data|tojson|safe if initial_data else '{"teams":[],"currentQuestion":null}' }};
-    </script>
-
     <div id="app">
-        <div id="login-section" v-if="!isLoggedIn">
+        <div v-if="!isLoggedIn" id="login-section">
             <h2>Вход в панель управления</h2>
             <form @submit.prevent="login">
-                <input type="text" v-model="username" placeholder="Имя пользователя">
-                <input type="password" v-model="password" placeholder="Пароль">
+                <input v-model="username" type="text" placeholder="Имя пользователя" required>
+                <input v-model="password" type="password" placeholder="Пароль" required>
                 <button type="submit">Войти</button>
             </form>
-            <p class="error" v-if="loginError" style="color: red;">{{ loginError }}</p>
+            <p v-if="loginError">{{ loginError }}</p>
         </div>
 
-        <div id="control-panel" v-else>
+        <div v-else id="control-panel">
             <div class="sidebar">
                 <h3>Раунды</h3>
                 <div class="round-selector">
-                    <button
-                        v-for="round in 3"
-                        :key="round"
-                        @click="selectRound(round)"
-                        :class="{ active: currentRound === round }"
-                    >
+                    <button v-for="round in [1, 2, 3]" :class="{ active: currentRound === round }" @click="selectRound(round)">
                         Раунд {{ round }}
                     </button>
                 </div>
             </div>
 
             <div class="main-content">
-                <div class="question-section">
-                    <h3>Текущий вопрос</h3>
-                    <div class="question-display">
-                        <!-- Используем Vue v-if вместо прямого обращения к переменной -->
-                        <div v-if="currentQuestion">
-                            <p v-text="currentQuestion.text"></p>
-                            <div class="timer" v-if="timer > 0">
-                                {{ timer }}
+                <div class="question-display">
+                    <h2>Текущий вопрос</h2>
+                    <div v-if="initial_data.currentQuestion">
+                        <p>{{ initial_data.currentQuestion.text }}</p>
+                        <div v-if="initial_data.currentQuestion.round === 1" class="options">
+                            <div class="option" :class="{correct: showingResults && correctAnswer === 'true'}">Правда</div>
+                            <div class="option" :class="{correct: showingResults && correctAnswer === 'false'}">Ложь</div>
+                        </div>
+                        <div v-else-if="initial_data.currentQuestion.round === 2" class="options">
+                            <div v-for="(text, opt) in initial_data.currentQuestion.options" class="option" :class="{correct: showingResults && correctAnswer === opt}">
+                                {{ opt }}: {{ text }}
                             </div>
                         </div>
-                        <div v-else>
-                            <p>Нет активного вопроса</p>
+                        <div v-else-if="initial_data.currentQuestion.round === 3 && showingResults">
+                            Правильный ответ: {{ correctAnswer }}
                         </div>
+                        <div class="timer">{{ timer }}</div>
+                    </div>
+                    <div v-else>
+                        <p>Нет активного вопроса</p>
                     </div>
                 </div>
 
-                <div class="controls">
-                    <button @click="startQuestion" :disabled="!currentQuestion">
-                        Начать вопрос
-                    </button>
-                    <button @click="showAnswers" :disabled="!currentQuestion">
-                        Показать ответы
-                    </button>
-                </div>
-
                 <div class="results">
-                    <h3>Результаты команд</h3>
-                    <table v-if="teams.length > 0">
-                        <thead>
-                            <tr>
-                                <th>Команда</th>
-                                <th>Очки</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr v-for="team in teams" :key="team.name">
-                                <td v-text="team.name"></td>
-                                <td v-text="team.score"></td>
-                            </tr>
-                        </tbody>
+                    <h2>Результаты команд</h2>
+                    <table v-if="initial_data.teams.length && showingResults">
+                        <tr>
+                            <th>Команда</th>
+                            <th>Очки</th>
+                        </tr>
+                        <tr v-for="team in initial_data.teams">
+                            <td>{{ team.name }}</td>
+                            <td>{{ team.score }}</td>
+                        </tr>
                     </table>
                     <p v-else>Нет зарегистрированных команд</p>
                 </div>
             </div>
         </div>
     </div>
-
-    <script src="https://cdn.jsdelivr.net/npm/vue@2"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
-    <!-- Передаем начальные данные в Vue приложение -->
     <script>
-        window.initialData = {{ initial_data|tojson|safe }};
+        window.initial_data = {{ initial_data | tojson | safe }};
     </script>
-    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    <script src="/static/main.js"></script>
 </body>
 </html>

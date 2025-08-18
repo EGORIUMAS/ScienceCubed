@@ -94,3 +94,15 @@ body {
 .results th {
     background-color: #f5f5f5;
 }
+
+.correct {
+    background-color: #28a745;
+    color: white;
+}
+
+.option {
+    padding: 10px;
+    margin: 5px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+}

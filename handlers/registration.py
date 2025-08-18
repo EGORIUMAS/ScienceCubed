@@ -12,7 +12,7 @@ user_states = {}
 #@RateLimiter(seconds=5)  # 1 запрос каждые 5 секунд
 async def start_registration(client, message):
     if message.from_user.username == TG_ADMIN_USERNAME:
-        await message.reply("Добра пожаловать, администратор! Но, увы, эта команда не для вас")
+        await message.reply("Добро пожаловать, администратор! Но, увы, эта команда не для вас")
         return
     # Проверка, является ли пользователь уже участником команды
     session = Session()
