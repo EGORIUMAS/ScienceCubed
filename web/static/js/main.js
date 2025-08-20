@@ -6,11 +6,13 @@ let questionIds = [];
 let timerInterval = null;
 let questionCounter = 0; // For sequential question numbering
 let currentRound = 1; // Track current round
+let lastLeaderboardSnapshot = null;
 
 const tickSound1 = document.getElementById('tick1-sound');
 const tickSound2 = document.getElementById('tick2-sound');
 const lastSound1 = document.getElementById('last1-sound');
 const lastSound2 = document.getElementById('last2-sound');
+const endSound = document.getElementById('end-sound')
 
 const content = document.getElementById('content');
 const waiting = document.getElementById('waiting');
@@ -26,6 +28,8 @@ const questionProgress = document.getElementById('question-progress');
 const correctAnswer = document.getElementById('correct-answer');
 const leaderboardBody = document.querySelector('#leaderboard tbody');
 const leaderboardHead = document.querySelector('#leaderboard thead tr');
+const leaderboardHeadRow = document.getElementById('leaderboard-head-row');
+const leaderboardBodyEl = document.getElementById('leaderboard-body');
 
 // Show/hide sections with animation
 function showSection(section) {
@@ -119,6 +123,7 @@ function startTimer(duration) {
             const circumference = 2 * Math.PI * 140;
             progressCircle.style.strokeDashoffset = circumference; // Completely empty
             timerSvg.classList.add('vibrate');
+            if (endSound) endSound.play();
             setTimeout(() => timerSvg.classList.remove('vibrate'), 500);
             progressCircle.classList.remove('pulse');
         }
@@ -133,6 +138,284 @@ function updateTimerDisplay() {
     // Progress bar empties as time runs out (clockwise from top)
     const offset = circumference * progress;
     progressCircle.style.strokeDashoffset = offset;
+}
+/**
+ * Parse team's answers into Map{id -> score}
+ */
+function parseAnswersMap(team) {
+    try {
+        const arr = typeof team.answers === 'string' ? JSON.parse(team.answers || '[]') : (team.answers || []);
+        const map = new Map();
+        arr.forEach(a => {
+            if (a && (a.id !== undefined)) {
+                // ensure numeric or string identity consistent
+                map.set(String(a.id), Number(a.rate || 0));
+            }
+        });
+        return map;
+    } catch (e) {
+        console.warn('Failed to parse team.answers', e);
+        return new Map();
+    }
+}
+
+/**
+ * Build a deterministic ordered list of questionIds from server data.
+ * Preference: if server provided data.question_ids, use it. Else union of all teams' answers sorted ascending.
+ */
+function extractQuestionIdsFromData(data) {
+    if (Array.isArray(data.question_ids) && data.question_ids.length > 0) {
+        return data.question_ids.map(String);
+    }
+    const idsSet = new Set();
+    (data.teams || []).forEach(team => {
+        const map = parseAnswersMap(team);
+        for (let key of map.keys()) idsSet.add(key);
+    });
+    // sort numeric if possible
+    const arr = Array.from(idsSet);
+    arr.sort((a,b) => {
+        const an = Number(a), bn = Number(b);
+        if (!isNaN(an) && !isNaN(bn)) return an - bn;
+        return a.localeCompare(b);
+    });
+    return arr;
+}
+
+/**
+ * Create snapshot object from data
+ */
+function buildSnapshotFromData(data) {
+    const qids = extractQuestionIdsFromData(data);
+    const teams = (data.teams || []).map(team => {
+        const answersMap = parseAnswersMap(team);
+        // build per-question array in qids order
+        const per = {};
+        qids.forEach(id => { per[id] = Number(answersMap.get(id) || 0); });
+        return {
+            name: team.name,
+            per,
+            total: Number(team.score || Object.values(per).reduce((s,v)=>s+v,0))
+        };
+    });
+    return { questionIds: qids, teams };
+}
+
+/**
+ * Render snapshot to DOM (complete rebuild, no animation for new columns).
+ * If `fast`==true — render without entrance animations (used when we first show old snapshot).
+ */
+function renderSnapshot(snapshot, fast = false) {
+    // build header: Team | q... | Sum
+    // clear header cells except first (Team) and sum (last) - but we will reconstruct entirely to be safe
+    while (leaderboardHeadRow.firstChild) leaderboardHeadRow.removeChild(leaderboardHeadRow.firstChild);
+
+    const thTeam = document.createElement('th');
+    thTeam.textContent = 'Команда';
+    leaderboardHeadRow.appendChild(thTeam);
+
+    snapshot.questionIds.forEach(qid => {
+        const th = document.createElement('th');
+        th.dataset.qid = qid;
+        th.textContent = displayQuestionNumber(qid);
+        if (!fast) th.classList.add('col-new');
+        leaderboardHeadRow.appendChild(th);
+    });
+
+    const thSum = document.createElement('th');
+    thSum.classList.add('sum-header');
+    thSum.textContent = 'Сумма';
+    leaderboardHeadRow.appendChild(thSum);
+
+    // body
+    leaderboardBodyEl.innerHTML = '';
+    snapshot.teams.forEach(team => {
+        const tr = document.createElement('tr');
+        tr.dataset.team = team.name;
+
+        const tdName = document.createElement('td');
+        tdName.textContent = team.name;
+        tr.appendChild(tdName);
+
+        snapshot.questionIds.forEach(qid => {
+            const td = document.createElement('td');
+            td.textContent = team.per[qid] || 0;
+            tr.appendChild(td);
+        });
+
+        const tdSum = document.createElement('td');
+        tdSum.classList.add('sum-cell');
+        tdSum.textContent = team.total;
+        tr.appendChild(tdSum);
+
+        leaderboardBodyEl.appendChild(tr);
+    });
+}
+
+/**
+ * Helper: compute displayed question number (uses currentRound if set).
+ * If qid is numeric and rounds have offsets (10 per round), compute like before.
+ */
+function displayQuestionNumber(qid) {
+    // try to use currentRound (global variable) if set
+    const idNum = Number(qid);
+    if (!isNaN(idNum) && typeof currentRound === 'number' && currentRound >= 1) {
+        if (currentRound >= 2) {
+            return String(idNum - 10 * (currentRound - 1));
+        } else {
+            return String(idNum);
+        }
+    }
+    return qid;
+}
+
+/**
+ * Animate adding new question columns one-by-one.
+ * newQids: array of qid strings that must be appended in order
+ * newSnapshot: snapshot built from data (contains final totals)
+ */
+function animateAddColumns(newQids, newSnapshot, callback) {
+    if (!newQids || newQids.length === 0) {
+        if (callback) callback();
+        return;
+    }
+
+    let idx = 0;
+
+    function addNext() {
+        if (idx >= newQids.length) {
+            if (callback) callback();
+            return;
+        }
+        const qid = newQids[idx];
+        // append header th
+        const th = document.createElement('th');
+        th.dataset.qid = qid;
+        th.textContent = displayQuestionNumber(qid);
+        th.classList.add('col-new');
+        // insert before sum header (which is last)
+        const sumHeader = leaderboardHeadRow.querySelector('th.sum-header');
+        leaderboardHeadRow.insertBefore(th, sumHeader);
+
+        // for each row, append cell (with value from newSnapshot; if team didn't exist before, create)
+        const rows = Array.from(leaderboardBodyEl.querySelectorAll('tr'));
+        rows.forEach(tr => {
+            const teamName = tr.dataset.team;
+            const teamData = newSnapshot.teams.find(t => t.name === teamName);
+            const score = teamData ? (teamData.per[qid] || 0) : 0;
+            const td = document.createElement('td');
+            td.textContent = score;
+            td.classList.add('col-new','cell-highlight');
+            tr.insertBefore(td, tr.querySelector('td.sum-cell')); // before sum cell
+        });
+
+        // For teams present in newSnapshot but not in DOM (new teams) — add new row
+        newSnapshot.teams.forEach(team => {
+            const exists = rows.some(r => r.dataset.team === team.name);
+            if (!exists) {
+                const trNew = document.createElement('tr');
+                trNew.dataset.team = team.name;
+                const tdName = document.createElement('td');
+                tdName.textContent = team.name;
+                trNew.appendChild(tdName);
+                // for existing columns we must add empty/0 cells for previous qids
+                const currentHeaderQids = Array.from(leaderboardHeadRow.querySelectorAll('th'))
+                    .filter(th => th.dataset.qid)
+                    .map(th => String(th.dataset.qid));
+                currentHeaderQids.forEach(hqid => {
+                    const td = document.createElement('td');
+                    td.textContent = team.per[hqid] || 0;
+                    trNew.appendChild(td);
+                });
+                const tdSum = document.createElement('td');
+                tdSum.classList.add('sum-cell');
+                tdSum.textContent = team.total;
+                trNew.appendChild(tdSum);
+                leaderboardBodyEl.appendChild(trNew);
+            }
+        });
+
+        // animate sum updates for each row (increase by the newly added cell value)
+        const trsAfter = Array.from(leaderboardBodyEl.querySelectorAll('tr'));
+        trsAfter.forEach(tr => {
+            const tName = tr.dataset.team;
+            const domSumCell = tr.querySelector('td.sum-cell');
+            const oldSum = Number(domSumCell ? domSumCell.textContent : 0);
+            const teamNew = newSnapshot.teams.find(t => t.name === tName);
+            const newSum = teamNew ? teamNew.total : oldSum;
+            // animate number from oldSum to newSum over 400ms
+            if (oldSum !== newSum) {
+                animateNumber(domSumCell, oldSum, newSum, 400);
+                domSumCell.classList.add('cell-highlight');
+                setTimeout(() => domSumCell.classList.remove('cell-highlight'), 700);
+            }
+        });
+
+        // small delay before adding next column so user sees sequence
+        idx++;
+        setTimeout(addNext, 450);
+    }
+
+    addNext();
+}
+
+/**
+ * Animate numeric change in an element from `from` to `to` for `duration` ms.
+ */
+function animateNumber(el, from, to, duration) {
+    if (!el) return;
+    const start = performance.now();
+    const diff = to - from;
+    function step(now) {
+        const t = Math.min(1, (now - start) / duration);
+        const val = Math.round(from + diff * t);
+        el.textContent = val;
+        if (t < 1) requestAnimationFrame(step);
+        else el.textContent = to;
+    }
+    requestAnimationFrame(step);
+}
+
+/**
+ * Sort rows by new totals (from newSnapshot) with a visual reordering.
+ */
+function sortAndAnimate(newSnapshot, done) {
+    const rows = Array.from(leaderboardBodyEl.querySelectorAll('tr'));
+    // build map team->row
+    const rowMap = new Map();
+    rows.forEach(r => rowMap.set(r.dataset.team, r));
+
+    // sort team list by total desc
+    const sortedTeams = newSnapshot.teams.slice().sort((a,b) => b.total - a.total);
+
+    // apply reordering: we'll append rows in sorted order with fade/transform
+    leaderboardBodyEl.classList.add('reordering');
+
+    // For visual smoothness, set fixed height to body container to avoid layout jump
+    const bodyRect = leaderboardBodyEl.getBoundingClientRect();
+    leaderboardBodyEl.style.minHeight = bodyRect.height + 'px';
+
+    // animate: fade out slightly, then reorder DOM, then fade in
+    rows.forEach(r => r.style.opacity = '0.6');
+
+    setTimeout(() => {
+        // reappend rows in sorted order
+        sortedTeams.forEach(team => {
+            const r = rowMap.get(team.name);
+            if (r) leaderboardBodyEl.appendChild(r);
+        });
+        // restore opacity, let CSS transitions move them
+        setTimeout(() => {
+            const newRows = Array.from(leaderboardBodyEl.querySelectorAll('tr'));
+            newRows.forEach(r => r.style.opacity = '1');
+            // cleanup
+            setTimeout(() => {
+                leaderboardBodyEl.classList.remove('reordering');
+                leaderboardBodyEl.style.minHeight = '';
+                if (done) done();
+            }, 450);
+        }, 50);
+    }, 250);
 }
 
 socket.on('connect', () => {
@@ -212,60 +495,107 @@ socket.on('timer_end', () => {
 });
 
 socket.on('show_results', (data) => {
-    console.log('Received show_results:', data);
+    console.log('Received show_results (leaderboard module):', data);
     clearTimer();
     showSection(resultsContainer);
 
-    // Only show correct answer if it's provided and not empty
+    // Show correct answer if exists
     if (data.correct_answer && data.correct_answer.trim() !== '') {
         let displayAnswer = data.correct_answer;
-        // Convert boolean values to Russian
-        if (displayAnswer.toLowerCase() === 'true') {
-            displayAnswer = 'правда';
-        } else if (displayAnswer.toLowerCase() === 'false') {
-            displayAnswer = 'ложь';
-        }
+        if (displayAnswer.toLowerCase() === 'true') displayAnswer = 'правда';
+        else if (displayAnswer.toLowerCase() === 'false') displayAnswer = 'ложь';
         correctAnswer.textContent = `Правильный ответ: ${displayAnswer}`;
         correctAnswer.style.display = 'block';
     } else {
         correctAnswer.style.display = 'none';
     }
 
-    leaderboardBody.innerHTML = '';
-    // Sort by total score
-    data.teams.sort((a, b) => b.score - a.score);
-    data.teams.forEach((team, index) => {
-        const row = document.createElement('tr');
-        row.style.animation = `rowLift 0.5s ease-out ${index * 0.1}s forwards`;
+    // Build snapshot for new data
+    const newSnapshot = buildSnapshotFromData(data);
 
-        const nameCell = document.createElement('td');
-        nameCell.textContent = team.name;
-        row.appendChild(nameCell);
+    // If there was no previous snapshot -> render full
+    if (!lastLeaderboardSnapshot) {
+        renderSnapshot(newSnapshot, false);
+        // store snapshot
+        lastLeaderboardSnapshot = newSnapshot;
+        // After initial render, do a final sort animation to ensure order is correct
+        setTimeout(() => sortAndAnimate(newSnapshot), 200);
+        return;
+    }
 
-        // Scores for each question (from team.answers)
-        const answers = JSON.parse(team.answers || '[]');
-        questionIds.forEach((id, qIndex) => {
-            const cell = document.createElement('td');
-            const answer = answers.find(ans => ans.id === id);
-            cell.textContent = answer ? answer.rate : 0;
-            row.appendChild(cell);
+    // If snapshots equal (same qids and same totals) — just re-render to ensure freshness
+    const oldQids = lastLeaderboardSnapshot.questionIds.join(',');
+    const newQidsStr = newSnapshot.questionIds.join(',');
+    const totalsChanged = JSON.stringify(lastLeaderboardSnapshot.teams.map(t=>({n:t.name,s:t.total}))) !==
+                          JSON.stringify(newSnapshot.teams.map(t=>({n:t.name,s:t.total})));
+
+    // If question set identical but totals changed -> simply animate sum updates and sort
+    if (oldQids === newQidsStr) {
+        // update per-cell values (for safety) and animate sum changes
+        const rows = Array.from(leaderboardBodyEl.querySelectorAll('tr'));
+        rows.forEach(tr => {
+            const tName = tr.dataset.team;
+            const teamNew = newSnapshot.teams.find(t => t.name === tName);
+            if (!teamNew) return;
+            // update each per-question cell
+            const qids = newSnapshot.questionIds;
+            qids.forEach((qid, idx) => {
+                const td = tr.children[1 + idx]; // 0: name, 1..n: qcells
+                const newVal = teamNew.per[qid] || 0;
+                if (td && Number(td.textContent) !== newVal) {
+                    td.textContent = newVal;
+                    td.classList.add('cell-highlight');
+                    setTimeout(()=>td.classList.remove('cell-highlight'),700);
+                }
+            });
+            // update sum
+            const sumCell = tr.querySelector('td.sum-cell');
+            if (sumCell) {
+                const oldSum = Number(sumCell.textContent);
+                const newSum = teamNew.total;
+                if (oldSum !== newSum) {
+                    animateNumber(sumCell, oldSum, newSum, 500);
+                    sumCell.classList.add('cell-highlight');
+                    setTimeout(()=>sumCell.classList.remove('cell-highlight'),700);
+                }
+            }
         });
+        // finally sort
+        setTimeout(()=> sortAndAnimate(newSnapshot), 300);
+        lastLeaderboardSnapshot = newSnapshot;
+        return;
+    }
 
-        const sumCell = document.createElement('td');
-        sumCell.textContent = team.score;
-        row.appendChild(sumCell);
-        leaderboardBody.appendChild(row);
+    // If question set differs -> determine new questions (append order)
+    const addedQids = newSnapshot.questionIds.filter(q => !lastLeaderboardSnapshot.questionIds.includes(q));
+    // Render previous snapshot first (fast, without animation) if current DOM doesn't match it
+    renderSnapshot(lastLeaderboardSnapshot, true);
+
+    // Now animate adding the new columns sequentially, then sort
+    animateAddColumns(addedQids, newSnapshot, () => {
+        // Final sort animation
+        sortAndAnimate(newSnapshot, () => {
+            // finally store snapshot
+            lastLeaderboardSnapshot = newSnapshot;
+        });
     });
 });
 
 socket.on('round_ended', () => {
     clearTimer();
     showSection(resultsContainer);
-    // Reset for new round
-    completedQuestions = 0;
-    questionCounter = 0;
-    questionIds = [];
-    updateTableHeaders();
+    // Reset snapshot and clear DOM table (keeps headers minimal)
+    lastLeaderboardSnapshot = null;
+    // rebuild empty header (Team | Sum)
+    while (leaderboardHeadRow.firstChild) leaderboardHeadRow.removeChild(leaderboardHeadRow.firstChild);
+    const thTeam = document.createElement('th');
+    thTeam.textContent = 'Команда';
+    leaderboardHeadRow.appendChild(thTeam);
+    const thSum = document.createElement('th');
+    thSum.classList.add('sum-header');
+    thSum.textContent = 'Сумма';
+    leaderboardHeadRow.appendChild(thSum);
+    leaderboardBodyEl.innerHTML = '';
 });
 
 socket.on('game_info', (data) => {

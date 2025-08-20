@@ -1,3 +1,5 @@
+from sys import exception
+
 from pyrogram import Client, filters
 from pyrogram.types import CallbackQuery
 from database.db import Team, Question, GameState
@@ -293,6 +295,7 @@ async def text_answer_rate(client, callback_query: CallbackQuery):
             session.commit()
             await client.send_message(team.leader_id, f"Ваш ответ на вопрос №{question_id} оценили! Балл: {rate_val}")
     finally:
+        await callback_query.answer("Callback обработан")
         session.close()
 
 @is_admin
@@ -370,3 +373,32 @@ async def load_questions(client, message):
     except Exception as e:
         logger.error(f"Error in load_questions: {str(e)}", exc_info=True)
         await message.reply(f"❌ Ошибка при загрузке вопросов: {str(e)}")
+
+@is_admin
+async def show_users(client, message):
+    session = Session()
+    try:
+        teams = session.query(Team).all()
+        answer = ""
+        for team in teams:
+            answer += str(team.id) + ": " + team.name +"\n"
+            answer += ", ".join(player for player in json.loads(team.players)) + "\nСчёт: "
+            answer += str(team.score) + "\n\n"
+        await client.send_message(message.chat.id, answer)
+    finally:
+        session.close()
+
+@is_admin
+async def edit_score(client, message):
+    session = Session()
+    try:
+        _, team_id, amount = message.text.split(" ")
+        team_id = int(team_id)
+        amount = int(amount)
+        team = session.get(Team, team_id)
+        team.score += amount
+        await message.reply("Счёт изменён")
+    except Exception as e:
+        await message.reply(f"Не удалось изменить счёт: {e}")
+    finally:
+        session.close()

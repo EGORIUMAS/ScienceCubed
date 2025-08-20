@@ -118,9 +118,9 @@ async def handle_text_answer(client, message):
 
         keyboard = InlineKeyboardMarkup([
             [
-                InlineKeyboardButton("0 баллов", callback_data=f"answer_{question.id}_{team.id}_0"),
-                InlineKeyboardButton("1 балл", callback_data=f"answer_{question.id}_{team.id}_1"),
-                InlineKeyboardButton("2 балла", callback_data=f"answer_{question.id}_{team.id}_2")
+                InlineKeyboardButton("0 баллов", callback_data=f"rate_{question.id}_{team.id}_0"),
+                InlineKeyboardButton("1 балл", callback_data=f"rate_{question.id}_{team.id}_1"),
+                InlineKeyboardButton("2 балла", callback_data=f"rate_{question.id}_{team.id}_2")
             ]
         ])
         await client.send_message(

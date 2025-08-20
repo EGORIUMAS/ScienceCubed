@@ -167,3 +167,36 @@ main {
         y: 105;
     }
 }
+
+/* ---- Leaderboard animations ---- */
+.leaderboard-wrap { overflow-x: auto; }
+
+th.col-new, td.col-new {
+    animation: slideInCol 0.4s ease-out forwards;
+    transform-origin: left center;
+}
+
+@keyframes slideInCol {
+    0% { transform: translateX(20px); opacity: 0; }
+    100% { transform: translateX(0); opacity: 1; }
+}
+
+td.cell-highlight {
+    animation: highlightAdd 0.8s ease-out;
+}
+
+@keyframes highlightAdd {
+    0% { background: rgba(40,167,69,0.15); transform: scale(1.02); }
+    50% { background: rgba(40,167,69,0.25); transform: scale(1.0); }
+    100% { background: transparent; }
+}
+
+/* Smooth row reordering */
+tbody tr {
+    transition: transform 400ms ease, opacity 300ms ease;
+}
+
+tbody.reordering tr {
+    /* while reordering give small opacity difference */
+    transition: transform 400ms ease, opacity 300ms ease;
+}

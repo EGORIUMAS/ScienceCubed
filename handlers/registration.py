@@ -43,6 +43,8 @@ async def create_team_handler(client, callback_query: CallbackQuery):
     # Установка состояния ожидания названия команды
     user_states[callback_query.from_user.id] = "waiting_team_name"
 
+    await callback_query.answer("Ожидание названия")
+
 
 #@RateLimiter(seconds=5)
 async def handle_team_creation(client: Client, message: Message):

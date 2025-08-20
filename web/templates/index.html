@@ -35,21 +35,25 @@
         <div id="results-container" class="hidden">
             <h2>Результаты</h2>
             <p id="correct-answer" style="display: none;"></p>
-            <table id="leaderboard">
-                <thead>
-                    <tr>
-                        <th>Команда</th>
-                        <!-- Баллы за вопросы будут динамически добавлены -->
-                    </tr>
-                </thead>
-                <tbody></tbody>
-            </table>
+            <div class="leaderboard-wrap">
+                <table id="leaderboard">
+                    <thead>
+                        <tr id="leaderboard-head-row">
+                            <th>Команда</th>
+                            <!-- динамически вставляем номера вопросов -->
+                            <th class="sum-header">Сумма</th>
+                        </tr>
+                    </thead>
+                    <tbody id="leaderboard-body"></tbody>
+                </table>
+            </div>
         </div>
     </main>
     <audio id="tick1-sound" src="/static/sounds/tick1.mp3" preload="auto"></audio>
     <audio id="tick2-sound" src="/static/sounds/tick2.mp3" preload="auto"></audio>
     <audio id="last1-sound" src="/static/sounds/last1.mp3" preload="auto"></audio>
     <audio id="last2-sound" src="/static/sounds/last2.mp3" preload="auto"></audio>
+    <audio id="end-sound" src="/static/sounds/end.mp3" preload="auto"></audio>
     <script src="/static/js/main.js"></script>
 </body>
 </html>

@@ -25,6 +25,9 @@ def register_handlers(bot):
         bot.add_handler(MessageHandler(next_question, filters.command("next_question")))
         bot.add_handler(MessageHandler(show_results, filters.command("show_results")))
         bot.add_handler(MessageHandler(load_questions, filters.command("load_questions")))
+        bot.add_handler(MessageHandler(show_users, filters.command("show_users")))
+        bot.add_handler(MessageHandler(edit_score, filters.command("edit_score")))
+        bot.add_handler(CallbackQueryHandler(text_answer_rate, filters.regex("rate")))
         logger.debug("Admin command handlers registered")
 
         # Регистрация общих команд
