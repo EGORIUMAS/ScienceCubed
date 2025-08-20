@@ -194,14 +194,17 @@ async def next_question(client, message):
                 logger.error(f"Failed to send question {next_q.id} to team {team.id}: {e}", exc_info=True)
 
         # Сразу уведомляем веб-клиентов о новом вопросе (фронт обновится)
+        logger.info(f"Emitting new_question for qid={next_q.id} round={next_q.round_number}")
         try:
             socketio.emit('new_question', {
                 'id': next_q.id,
                 'text': next_q.text,
                 'round': next_q.round_number,
                 'options': next_q.options,
-                'time_limit': next_q.time_limit
-            })
+                'time_limit': next_q.time_limit,
+                'total_questions': len(round_questions)
+            }, namespace="/")
+            logger.info("new_question emmited")
         except Exception as e:
             logger.error(f"Emit new_question failed: {e}", exc_info=True)
 
@@ -211,12 +214,14 @@ async def next_question(client, message):
             try:
                 while remaining > 0:
                     try:
+                        logger.info(f"Emitting timer_update for qid={next_q.id} round={next_q.round_number}, time: {remaining}")
                         socketio.emit('timer_update', {'time': remaining})
                     except Exception as e:
                         logger.debug(f"timer_emit error: {e}")
                     await asyncio.sleep(1)
                     remaining -= 1
                 try:
+                    logger.info(f"Emitting timer_end for qid={next_q.id} round={next_q.round_number}")
                     socketio.emit('timer_end', {})
                 except Exception as e:
                     logger.debug(f"timer_end emit error: {e}")
@@ -257,6 +262,7 @@ async def show_results(client, message):
         teams_data = [{'id': t.id, 'name': t.name, 'score': t.score, 'answers': t.answers} for t in teams]
 
         try:
+            logger.info(f"Emitting show_results for qid={question.id} round={question.round_number}")
             socketio.emit('show_results', {
                 'correct_answer': question.correct_answer,
                 'teams': teams_data

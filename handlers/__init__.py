@@ -30,8 +30,6 @@ def register_handlers(bot):
         # Регистрация общих команд
         bot.add_handler(MessageHandler(help_command, filters.command("help")))
         bot.add_handler(MessageHandler(rules_command, filters.command("rules")))
-        bot.add_handler(MessageHandler(status_command, filters.command("status")))
-        bot.add_handler(MessageHandler(leaderboard_command, filters.command("leaderboard")))
         logger.debug("Common command handlers registered")
 
         # Регистрация команд для регистрации
